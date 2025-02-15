@@ -51,7 +51,7 @@ static Project g_naox_projects[] = {
         .link = "https://inbreeze.xyz"
     },
     {
-        .title = "Visit NaoX",
+        .title = "NaoX",
         .description = "Explore more innovative projects and solutions at NaoX, where technology meets creativity.",
         .image = NULL,
         .link = "https://naox.io"
@@ -122,6 +122,50 @@ char* get_image_filename(const char* project_name, char* buffer, size_t buffer_s
     buffer[j] = '\0';
     return buffer;
 }
+
+const int PROJECT_CARD_WIDTH = 256;
+const int PROJECT_CARD_HEIGHT = 300;
+
+// Create and configure naox projects grid
+Rocks_GridConfig naox_projects_grid_config = {
+    .width = PROJECT_CARD_WIDTH,
+    .height = PROJECT_CARD_HEIGHT,
+    .gap = 20,
+    .columns = 0,
+    .padding = 0,
+    .containerName = "NaoxProjectsGrid"
+};
+
+// Create and configure personal projects grid 
+Rocks_GridConfig personal_projects_grid_config = {
+    .width = PROJECT_CARD_WIDTH,
+    .height = PROJECT_CARD_HEIGHT,
+    .gap = 20,
+    .columns = 0,
+    .padding = 20,
+    .containerName = "PersonalProjectsGrid"
+};
+
+// Create and configure blog grid
+Rocks_GridConfig blog_grid_config = {
+    .width = 320,
+    .height = 225,
+    .gap = 20,
+    .columns = 0,
+    .padding = 20,
+    .containerName = "BlogGrid"
+};
+
+// Create and configure connections grid
+Rocks_GridConfig connections_grid_config = {
+    .width = 225,
+    .height = 110,
+    .gap = 20,
+    .columns = 0,
+    .padding = 20,
+    .containerName = "ConnectionsGrid"
+};
+
 static void render_project_card(void* data) {
     Project* project = (Project*)data;
     Rocks_Theme theme = Rocks_GetTheme(GRocks);
@@ -131,7 +175,7 @@ static void render_project_card(void* data) {
     
     CLAY({
         .layout = {
-            .sizing = { CLAY_SIZING_FIXED(300), CLAY_SIZING_FIXED(400) },
+            .sizing = { CLAY_SIZING_FIXED(PROJECT_CARD_WIDTH), CLAY_SIZING_FIXED(PROJECT_CARD_HEIGHT) },
             .padding = CLAY_PADDING_ALL(20),
             .childGap = 15,
             .layoutDirection = CLAY_TOP_TO_BOTTOM
@@ -146,7 +190,7 @@ static void render_project_card(void* data) {
         if (project->image) {
             CLAY({
                 .layout = {
-                    .sizing = { CLAY_SIZING_FIXED(260), CLAY_SIZING_FIXED(180) }
+                    .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(180) }
                 },
                 .image = {
                     .imageData = project->image,
@@ -193,7 +237,6 @@ static void render_blog_post_card(void* data) {
     
     CLAY({
         .layout = {
-            .sizing = { CLAY_SIZING_FIXED(300), CLAY_SIZING_FIXED(200) },
             .padding = CLAY_PADDING_ALL(20),
             .childGap = 10,
             .layoutDirection = CLAY_TOP_TO_BOTTOM
@@ -233,7 +276,6 @@ static void render_connection_card(void* data) {
     
     CLAY({
         .layout = {
-            .sizing = { CLAY_SIZING_FIXED(200), CLAY_SIZING_FIXED(100) },
             .padding = CLAY_PADDING_ALL(15),
             .childGap = 10,
             .layoutDirection = CLAY_TOP_TO_BOTTOM,
@@ -259,7 +301,6 @@ static void render_connection_card(void* data) {
         }));
     }
 }
-
 static Clay_RenderCommandArray app_update(Rocks* rocks, float dt) {
     Rocks_Theme theme = Rocks_GetTheme(rocks);
     Clay_Dimensions logo_dims = Rocks_GetImageDimensions(rocks, g_logo_image);
@@ -441,58 +482,6 @@ int main(void) {
 
     // Load logo image
     g_logo_image = Rocks_LoadImage(rocks, "assets/logo.png");
-
-    Rocks_GridConfig naox_projects_grid_config = {
-        .minWidth = 300,
-        .maxWidth = 400,
-        .minHeight = 400,
-        .maxHeight = 450,
-        .aspectRatio = 0.75f,
-        .gap = 20,
-        .columns = 0,
-        .padding = 20,
-        .containerName = "NaoxProjectsGrid"
-    };
-
-    // Create and configure personal projects grid
-    Rocks_GridConfig personal_projects_grid_config = {
-        .minWidth = 300,
-        .maxWidth = 400,
-        .minHeight = 400,
-        .maxHeight = 450,
-        .aspectRatio = 0.75f,
-        .gap = 20,
-        .columns = 0,
-        .padding = 20,
-        .containerName = "PersonalProjectsGrid"
-    };
-
-    // Create and configure blog grid
-    Rocks_GridConfig blog_grid_config = {
-        .minWidth = 300,
-        .maxWidth = 400,
-        .minHeight = 200,
-        .maxHeight = 250,
-        .aspectRatio = 1.5f,
-        .gap = 20,
-        .columns = 0,
-        .padding = 20,
-        .containerName = "BlogGrid"
-    };
-
-    // Create and configure connections grid
-    Rocks_GridConfig connections_grid_config = {
-        .minWidth = 200,
-        .maxWidth = 250,
-        .minHeight = 100,
-        .maxHeight = 120,
-        .aspectRatio = 2.0f,
-        .gap = 20,
-        .columns = 0,
-        .padding = 20,
-        .containerName = "ConnectionsGrid"
-    };
-
 
     g_naox_projects_grid = Rocks_CreateGrid();
     Rocks_InitGrid(g_naox_projects_grid, naox_projects_grid_config);
