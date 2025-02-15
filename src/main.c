@@ -1,6 +1,9 @@
 #define ROCKS_CLAY_IMPLEMENTATION
 #include "rocks.h"
+#include "components/grid.h"
 #include <ctype.h>
+#include <stdio.h>
+#include <string.h>
 
 enum {
     FONT_TITLE = 0,
@@ -10,7 +13,14 @@ enum {
 
 static uint16_t g_font_ids[FONT_COUNT];
 static void* g_logo_image;
-static void* g_project_images[6];
+static void* g_project_images[10];
+
+static Rocks_Grid* g_naox_projects_grid = NULL;
+static Rocks_Grid* g_personal_projects_grid = NULL;
+static Rocks_Grid* g_blog_grid = NULL;
+static Rocks_Grid* g_connections_grid = NULL;
+
+
 
 typedef struct {
     const char* title;
@@ -19,7 +29,9 @@ typedef struct {
     const char* link;
 } Project;
 
-static Project g_projects[] = {
+
+// Split the projects into two arrays
+static Project g_naox_projects[] = {
     {
         .title = "Rocks",
         .description = "Framework for Clay, providing an easy way to change renderers and use premade components",
@@ -28,7 +40,7 @@ static Project g_projects[] = {
     },
     {
         .title = "Quest",
-        .description = "A personal life managment app focused on habit tracking, task organizatino and life visualization.",
+        .description = "A personal life management app focused on habit tracking, task organization and life visualization.",
         .image = NULL,
         .link = "http://quest.naox.io/"
     },
@@ -39,10 +51,19 @@ static Project g_projects[] = {
         .link = "https://inbreeze.xyz"
     },
     {
-        .title = "Carousel",
-        .description = "A fun lightweight spin the wheel tool.",
+        .title = "Visit NaoX",
+        .description = "Explore more innovative projects and solutions at NaoX, where technology meets creativity.",
         .image = NULL,
-        .link = "https://carousel.waozi.xyz"
+        .link = "https://naox.io"
+    }
+};
+
+static Project g_personal_projects[] = {
+    {
+        .title = "Kasaival",
+        .description = "A minimal and fast HTTP server written in C.",
+        .image = NULL,
+        .link = "https://github.com/waozixyz/kasaival"
     },
     {
         .title = "Algotree",
@@ -52,10 +73,34 @@ static Project g_projects[] = {
     }
 };
 
+
+typedef struct {
+    const char* title;
+    const char* description;
+    const char* date;
+    const char* link;
+} BlogPost;
+
 typedef struct {
     const char* platform;
     const char* contact;
 } Connection;
+
+
+static BlogPost g_blog_posts[] = {
+    {
+        .title = "Coming Soon",
+        .description = "Technical articles and insights coming soon...",
+        .date = "2024",
+        .link = "#"
+    },
+    {
+        .title = "Stay Tuned",
+        .description = "More content is on the way!",
+        .date = "2024",
+        .link = "#"
+    }
+};
 
 static Connection g_connections[] = {
     {"GitHub", "@waozixyz"},
@@ -77,13 +122,12 @@ char* get_image_filename(const char* project_name, char* buffer, size_t buffer_s
     buffer[j] = '\0';
     return buffer;
 }
-
-
-static void render_project_card(Rocks* rocks, Project project) {
-    Rocks_Theme theme = Rocks_GetTheme(rocks);
-    Clay_String title = { .chars = project.title, .length = strlen(project.title) };
-    Clay_String description = { .chars = project.description, .length = strlen(project.description) };
-    Clay_Dimensions image_dims = Rocks_GetImageDimensions(rocks, project.image);
+static void render_project_card(void* data) {
+    Project* project = (Project*)data;
+    Rocks_Theme theme = Rocks_GetTheme(GRocks);
+    Clay_String title = { .chars = project->title, .length = strlen(project->title) };
+    Clay_String description = { .chars = project->description, .length = strlen(project->description) };
+    Clay_Dimensions image_dims = Rocks_GetImageDimensions(GRocks, project->image);
     
     CLAY({
         .layout = {
@@ -96,24 +140,24 @@ static void render_project_card(Rocks* rocks, Project project) {
         .cornerRadius = CLAY_CORNER_RADIUS(8),
         .border = {
             .color = theme.border,
-            .width = { 1, 1, 1, 1 }
+            .width = { 2, 2, 2, 2 }
         }
     }) {
-        // Project image
-        CLAY({
-            .layout = {
-                .sizing = { CLAY_SIZING_FIXED(260), CLAY_SIZING_FIXED(180) }
-            },
-            .image = {
-                .imageData = project.image,
-                .sourceDimensions = image_dims
-            }
-        }) {}
+        if (project->image) {
+            CLAY({
+                .layout = {
+                    .sizing = { CLAY_SIZING_FIXED(260), CLAY_SIZING_FIXED(180) }
+                },
+                .image = {
+                    .imageData = project->image,
+                    .sourceDimensions = image_dims
+                }
+            }) {}
+        }
 
-        // Title
         CLAY_TEXT(title, CLAY_TEXT_CONFIG({
             .textColor = theme.text,
-            .fontSize = 20,
+            .fontSize = 24,
             .fontId = g_font_ids[FONT_TITLE]
         }));
 
@@ -123,13 +167,12 @@ static void render_project_card(Rocks* rocks, Project project) {
             .fontId = g_font_ids[FONT_BODY]
         }));
 
-        // Visit button
         CLAY({
             .layout = {
                 .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(40) },
                 .childAlignment = { CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER }
             },
-            .backgroundColor = theme.primary,
+            .backgroundColor = Clay_Hovered() ? theme.primary_hover : theme.primary,
             .cornerRadius = CLAY_CORNER_RADIUS(4)
         }) {
             CLAY_TEXT(CLAY_STRING("Visit Project"), CLAY_TEXT_CONFIG({
@@ -140,11 +183,53 @@ static void render_project_card(Rocks* rocks, Project project) {
         }
     }
 }
+static void render_blog_post_card(void* data) {
+    BlogPost* post = (BlogPost*)data;
+    Rocks_Theme theme = Rocks_GetTheme(GRocks);
+    
+    Clay_String date_str = { .chars = post->date, .length = strlen(post->date) };
+    Clay_String title_str = { .chars = post->title, .length = strlen(post->title) };
+    Clay_String desc_str = { .chars = post->description, .length = strlen(post->description) };
+    
+    CLAY({
+        .layout = {
+            .sizing = { CLAY_SIZING_FIXED(300), CLAY_SIZING_FIXED(200) },
+            .padding = CLAY_PADDING_ALL(20),
+            .childGap = 10,
+            .layoutDirection = CLAY_TOP_TO_BOTTOM
+        },
+        .backgroundColor = theme.secondary,
+        .cornerRadius = CLAY_CORNER_RADIUS(8),
+        .border = {
+            .color = theme.border,
+            .width = { 1, 1, 1, 1 }
+        }
+    }) {
+        CLAY_TEXT(date_str, CLAY_TEXT_CONFIG({
+            .textColor = theme.text_secondary,
+            .fontSize = 14,
+            .fontId = g_font_ids[FONT_BODY]
+        }));
 
-static void render_connection_card(Rocks* rocks, Connection connection) {
-    Rocks_Theme theme = Rocks_GetTheme(rocks);
-    Clay_String platform = { .chars = connection.platform, .length = strlen(connection.platform) };
-    Clay_String contact = { .chars = connection.contact, .length = strlen(connection.contact) };
+        CLAY_TEXT(title_str, CLAY_TEXT_CONFIG({
+            .textColor = theme.text,
+            .fontSize = 20,
+            .fontId = g_font_ids[FONT_TITLE]
+        }));
+
+        CLAY_TEXT(desc_str, CLAY_TEXT_CONFIG({
+            .textColor = theme.text_secondary,
+            .fontSize = 16,
+            .fontId = g_font_ids[FONT_BODY]
+        }));
+    }
+}
+
+static void render_connection_card(void* data) {
+    Connection* connection = (Connection*)data;
+    Rocks_Theme theme = Rocks_GetTheme(GRocks);
+    Clay_String platform = { .chars = connection->platform, .length = strlen(connection->platform) };
+    Clay_String contact = { .chars = connection->contact, .length = strlen(connection->contact) };
     
     CLAY({
         .layout = {
@@ -185,76 +270,154 @@ static Clay_RenderCommandArray app_update(Rocks* rocks, float dt) {
         .layout = {
             .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0) },
             .layoutDirection = CLAY_TOP_TO_BOTTOM,
-            .childGap = 40,
-            .padding = CLAY_PADDING_ALL(20)
+            .childGap = 60,
+            .padding = CLAY_PADDING_ALL(40),
+            .childAlignment = { CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_TOP }
         },
-            .scroll = { .vertical = true, .horizontal = false },
+        .scroll = { .vertical = true, .horizontal = false },
         .backgroundColor = theme.background
     }) {
-        
         // Logo section
         CLAY({
             .layout = {
-                        .sizing = { CLAY_SIZING_FIXED(128), CLAY_SIZING_FIXED(128) },
+                .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(200) },
                 .childAlignment = { CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER }
-            },
-            .image = {
-                .imageData = g_logo_image,
-                .sourceDimensions = logo_dims
             }
-        }) {}
-
-        // Projects grid
+        }) {
+            CLAY({
+                .layout = {
+                    .sizing = { CLAY_SIZING_FIXED(128), CLAY_SIZING_FIXED(128) }
+                },
+                .image = {
+                    .imageData = g_logo_image,
+                    .sourceDimensions = logo_dims
+                }
+            }) {}
+        }
+        // NaoX Projects Section
         CLAY({
             .layout = {
                 .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0) },
-                .layoutDirection = CLAY_LEFT_TO_RIGHT,
                 .childGap = 20,
-                .childAlignment = { CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_TOP }
+                .layoutDirection = CLAY_TOP_TO_BOTTOM
             }
         }) {
-            for (int i = 0; i < sizeof(g_projects)/sizeof(g_projects[0]); i++) {
-                render_project_card(rocks, g_projects[i]);
-            }
-        }
-
-        // Footer
-        CLAY({
-            .layout = {
-                .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(200) },
-                .childGap = 20,
-                .layoutDirection = CLAY_TOP_TO_BOTTOM,
-                .padding = CLAY_PADDING_ALL(20)
-            }
-        }) {
-            CLAY_TEXT(CLAY_STRING("Connect with me:"), CLAY_TEXT_CONFIG({
-                .textColor = theme.text,
-                .fontSize = 24,
+            CLAY_TEXT(CLAY_STRING("NaoX Projects"), CLAY_TEXT_CONFIG({
+                .textColor = theme.primary,
+                .fontSize = 32,
                 .fontId = g_font_ids[FONT_TITLE]
             }));
 
             CLAY({
+                .id = CLAY_ID("NaoxProjectsGrid"),
                 .layout = {
                     .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0) },
-                    .layoutDirection = CLAY_LEFT_TO_RIGHT,
-                    .childGap = 20,
-                    .childAlignment = { CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER }
+                    .childAlignment = { CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_TOP }
                 }
             }) {
-                for (int i = 0; i < sizeof(g_connections)/sizeof(g_connections[0]); i++) {
-                    render_connection_card(rocks, g_connections[i]);
+                Rocks_BeginGrid(g_naox_projects_grid);
+                for (int i = 0; i < sizeof(g_naox_projects)/sizeof(g_naox_projects[0]); i++) {
+                    Rocks_RenderGridItem(g_naox_projects_grid, i, render_project_card);
                 }
+                Rocks_EndGrid(g_naox_projects_grid);
+            }
+        }
+        // Personal Projects Section
+        CLAY({
+            .layout = {
+                .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0) },
+                .childGap = 20,
+                .layoutDirection = CLAY_TOP_TO_BOTTOM
+            }
+        }) {
+            CLAY_TEXT(CLAY_STRING("Other Projects"), CLAY_TEXT_CONFIG({
+                .textColor = theme.text,
+                .fontSize = 32,
+                .fontId = g_font_ids[FONT_TITLE]
+            }));
+
+            CLAY({
+                .id = CLAY_ID("PersonalProjectsGrid"),
+                .layout = {
+                    .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0) },
+                    .childAlignment = { CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_TOP }
+                }
+            }) {
+                Rocks_BeginGrid(g_personal_projects_grid);
+                for (int i = 0; i < sizeof(g_personal_projects)/sizeof(g_personal_projects[0]); i++) {
+                    Rocks_RenderGridItem(g_personal_projects_grid, i, render_project_card);
+                }
+                Rocks_EndGrid(g_personal_projects_grid);
+            }
+        }
+
+        // Blog Section
+        CLAY({
+            .layout = {
+                .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0) },
+                .childGap = 20,
+                .layoutDirection = CLAY_TOP_TO_BOTTOM
+            }
+        }) {
+            CLAY_TEXT(CLAY_STRING("Blog"), CLAY_TEXT_CONFIG({
+                .textColor = theme.text,
+                .fontSize = 32,
+                .fontId = g_font_ids[FONT_TITLE]
+            }));
+
+            CLAY({
+                .id = CLAY_ID("BlogGrid"),
+                .layout = {
+                    .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0) },
+                    .childAlignment = { CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_TOP }
+                }
+            }) {
+                Rocks_BeginGrid(g_blog_grid);
+                for (int i = 0; i < sizeof(g_blog_posts)/sizeof(g_blog_posts[0]); i++) {
+                    Rocks_RenderGridItem(g_blog_grid, i, render_blog_post_card);
+                }
+                Rocks_EndGrid(g_blog_grid);
+            }
+        }
+
+        // Connections section
+        CLAY({
+            .layout = {
+                .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0) },
+.childGap = 20,
+                .layoutDirection = CLAY_TOP_TO_BOTTOM
+            }
+        }) {
+            CLAY_TEXT(CLAY_STRING("Connect with me"), CLAY_TEXT_CONFIG({
+                .textColor = theme.text,
+                .fontSize = 32,
+                .fontId = g_font_ids[FONT_TITLE]
+            }));
+
+            CLAY({
+                .id = CLAY_ID("ConnectionsGrid"),
+                .layout = {
+                    .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0) },
+                    .childAlignment = { CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_TOP }
+                }
+            }) {
+                Rocks_BeginGrid(g_connections_grid);
+                for (int i = 0; i < sizeof(g_connections)/sizeof(g_connections[0]); i++) {
+                    Rocks_RenderGridItem(g_connections_grid, i, render_connection_card);
+                }
+                Rocks_EndGrid(g_connections_grid);
             }
         }
     }
     
     return Clay_EndLayout();
 }
+
 int main(void) {
     Rocks_Config config = {
         .window_width = 1280,
         .window_height = 720,
-        .window_title = "My Portfolio",
+        .window_title = "Waozi",
         .theme = {
             .background = (Clay_Color){245, 245, 245, 255},
             .primary = (Clay_Color){70, 130, 180, 255},
@@ -269,14 +432,6 @@ int main(void) {
         }
     };
 
-    #ifdef ROCKS_USE_RAYLIB
-    Rocks_RaylibConfig raylib_config = {
-        .screen_width = 1280,
-        .screen_height = 720
-    };
-    config.renderer_config = &raylib_config;
-    #endif
-
     Rocks* rocks = Rocks_Init(config);
     if (!rocks) return 1;
 
@@ -284,27 +439,123 @@ int main(void) {
     g_font_ids[FONT_TITLE] = Rocks_LoadFont("assets/Roboto-Bold.ttf", 24, FONT_TITLE);
     g_font_ids[FONT_BODY] = Rocks_LoadFont("assets/Roboto-Regular.ttf", 16, FONT_BODY);
 
-    // Load images
+    // Load logo image
     g_logo_image = Rocks_LoadImage(rocks, "assets/logo.png");
 
-    for (int i = 0; i < 5; i++) {
+    Rocks_GridConfig naox_projects_grid_config = {
+        .minWidth = 300,
+        .maxWidth = 400,
+        .minHeight = 400,
+        .maxHeight = 450,
+        .aspectRatio = 0.75f,
+        .gap = 20,
+        .columns = 0,
+        .padding = 20,
+        .containerName = "NaoxProjectsGrid"
+    };
+
+    // Create and configure personal projects grid
+    Rocks_GridConfig personal_projects_grid_config = {
+        .minWidth = 300,
+        .maxWidth = 400,
+        .minHeight = 400,
+        .maxHeight = 450,
+        .aspectRatio = 0.75f,
+        .gap = 20,
+        .columns = 0,
+        .padding = 20,
+        .containerName = "PersonalProjectsGrid"
+    };
+
+    // Create and configure blog grid
+    Rocks_GridConfig blog_grid_config = {
+        .minWidth = 300,
+        .maxWidth = 400,
+        .minHeight = 200,
+        .maxHeight = 250,
+        .aspectRatio = 1.5f,
+        .gap = 20,
+        .columns = 0,
+        .padding = 20,
+        .containerName = "BlogGrid"
+    };
+
+    // Create and configure connections grid
+    Rocks_GridConfig connections_grid_config = {
+        .minWidth = 200,
+        .maxWidth = 250,
+        .minHeight = 100,
+        .maxHeight = 120,
+        .aspectRatio = 2.0f,
+        .gap = 20,
+        .columns = 0,
+        .padding = 20,
+        .containerName = "ConnectionsGrid"
+    };
+
+
+    g_naox_projects_grid = Rocks_CreateGrid();
+    Rocks_InitGrid(g_naox_projects_grid, naox_projects_grid_config);
+
+    g_personal_projects_grid = Rocks_CreateGrid();
+    Rocks_InitGrid(g_personal_projects_grid, personal_projects_grid_config);
+
+    g_blog_grid = Rocks_CreateGrid();
+    Rocks_InitGrid(g_blog_grid, blog_grid_config);
+
+
+    g_connections_grid = Rocks_CreateGrid();
+    Rocks_InitGrid(g_connections_grid, connections_grid_config);
+
+
+    // Add items to respective grids
+    for (int i = 0; i < sizeof(g_naox_projects)/sizeof(g_naox_projects[0]); i++) {
         char filename[64];
         char path[128];
-        get_image_filename(g_projects[i].title, filename, sizeof(filename));
+        get_image_filename(g_naox_projects[i].title, filename, sizeof(filename));
         snprintf(path, sizeof(path), "assets/projects/%s.png", filename);
-        printf("Loading image: %s\n", path); // Debug print
         g_project_images[i] = Rocks_LoadImage(rocks, path);
-        g_projects[i].image = g_project_images[i];
+        g_naox_projects[i].image = g_project_images[i];
+        Rocks_AddGridItem(g_naox_projects_grid, &g_naox_projects[i]);
+    }
+
+    for (int i = 0; i < sizeof(g_personal_projects)/sizeof(g_personal_projects[0]); i++) {
+        char filename[64];
+        char path[128];
+        get_image_filename(g_personal_projects[i].title, filename, sizeof(filename));
+        snprintf(path, sizeof(path), "assets/projects/%s.png", filename);
+        g_project_images[i + sizeof(g_naox_projects)/sizeof(g_naox_projects[0])] = Rocks_LoadImage(rocks, path);
+        g_personal_projects[i].image = g_project_images[i + sizeof(g_naox_projects)/sizeof(g_naox_projects[0])];
+        Rocks_AddGridItem(g_personal_projects_grid, &g_personal_projects[i]);
+    }
+
+    // Add blog posts to grid
+    for (int i = 0; i < sizeof(g_blog_posts)/sizeof(g_blog_posts[0]); i++) {
+        Rocks_AddGridItem(g_blog_grid, &g_blog_posts[i]);
+    }
+
+    // Add connections to grid
+    for (int i = 0; i < sizeof(g_connections)/sizeof(g_connections[0]); i++) {
+        Rocks_AddGridItem(g_connections_grid, &g_connections[i]);
     }
 
     Rocks_Run(rocks, app_update);
     
     // Cleanup
+
+    Rocks_DestroyGrid(g_naox_projects_grid);
+    Rocks_DestroyGrid(g_personal_projects_grid);
+    Rocks_DestroyGrid(g_blog_grid);
+    Rocks_DestroyGrid(g_connections_grid);
     Rocks_UnloadFont(g_font_ids[FONT_TITLE]);
     Rocks_UnloadFont(g_font_ids[FONT_BODY]);
     Rocks_UnloadImage(rocks, g_logo_image);
-    for (int i = 0; i < 5; i++) {
+    // Cleanup
+    for (int i = 0; i < sizeof(g_naox_projects)/sizeof(g_naox_projects[0]); i++) {
         Rocks_UnloadImage(rocks, g_project_images[i]);
+    }
+    for (int i = 0; i < sizeof(g_personal_projects)/sizeof(g_personal_projects[0]); i++) {
+        Rocks_UnloadImage(rocks, g_project_images[i + sizeof(g_naox_projects)/sizeof(g_naox_projects[0])]);
     }
     Rocks_Cleanup(rocks);
     
