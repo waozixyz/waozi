@@ -1,0 +1,3 @@
+[submodule "rocks"]
+	path = rocks
+	url = git@github.com:naoxio/rocks.git
